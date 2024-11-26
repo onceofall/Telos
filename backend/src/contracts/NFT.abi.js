@@ -4,8 +4,13 @@ const NFT_ABI = [
     "inputs": [
       {
         "internalType": "string",
-        "name": "tokenURI",
+        "name": "_tokenURI",
         "type": "string"
+      },
+      {
+        "internalType": "uint96",
+        "name": "royaltyPoints",
+        "type": "uint96"
       }
     ],
     "name": "mintNFT",
@@ -208,4 +213,4 @@ const NFT_ABI = [
   }
 ];
 
-module.exports = NFT_ABI; 
+export default NFT_ABI; 

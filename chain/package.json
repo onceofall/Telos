@@ -1,0 +1,19 @@
+{
+  "name": "ownpicture-chain",
+  "version": "1.0.0",
+  "description": "Smart contract for OwnPicture NFT Platform",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-ethers": "^3.0.8",
+    "@nomicfoundation/hardhat-toolbox": "^3.0.0",
+    "@openzeppelin/contracts": "^4.9.6",
+    "dotenv": "^16.0.3",
+    "ethers": "^6.13.4",
+    "hardhat": "^2.17.0",
+    "hardhat-deploy": "^0.12.4",
+    "hardhat-deploy-ethers": "^0.4.2"
+  }
+}

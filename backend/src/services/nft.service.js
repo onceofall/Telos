@@ -1,63 +1,219 @@
-const { create } = require('ipfs-http-client');
-const { ethers } = require('ethers');
-const NFT = require('../models/nft.model');
-const NFT_ABI = require('../contracts/NFT.abi.js');
+import { S3Client, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { ethers } from 'ethers';
+import NFT from '../models/nft.model.js';
+import NFT_ABI from '../contracts/NFT.abi.js';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 class NFTService {
   constructor() {
-    this.ipfs = create(process.env.IPFS_NODE);
-    this.provider = new ethers.JsonRpcProvider(process.env.BLOCKCHAIN_RPC_URL);
+    // 初始化 Filebase S3 客户端
+    this.s3Client = new S3Client({
+      endpoint: "https://s3.filebase.com",
+      region: "us-east-1",
+      credentials: {
+        accessKeyId: process.env.FILEBASE_ACCESS_KEY,
+        secretAccessKey: process.env.FILEBASE_SECRET_KEY
+      }
+    });
+
+    // 初始化区块链提供者和合约
     
-    // 初始化智能合约
-    this.contract = new ethers.Contract(
+    this.provider = new ethers.JsonRpcProvider(process.env.BLOCKCHAIN_RPC_URL);
+    console.log(process.env.BLOCKCHAIN_RPC_URL);
+    // 确保私钥格式正确
+    const privateKey = process.env.PRIVATE_KEY_1.startsWith('0x') 
+        ? process.env.PRIVATE_KEY_1 
+        : `0x${process.env.PRIVATE_KEY_1}`;
+
+    console.log(privateKey);
+
+    // 初始化钱包
+    this.wallet = new ethers.Wallet(privateKey, this.provider);
+    
+    console.log('Wallet address:', this.wallet.address);
+    
+    console.log(process.env.CONTRACT_ADDRESS);
+    // 使用钱包连接合约
+    this.nftContract = new ethers.Contract(
       process.env.CONTRACT_ADDRESS,
       NFT_ABI,
-      this.provider
+      this.wallet  // 使用钱包而不是 provider
     );
+
+    console.log('NFT Contract initialized at:', process.env.CONTRACT_ADDRESS);
   }
 
-  async uploadToIPFS(file, metadata) {
+  // 上传文件到 Filebase IPFS
+  async uploadFileToIPFS(file) {
     try {
-      // 上传图片到IPFS
-      const fileResult = await this.ipfs.add(file.buffer);
+      console.log('Starting file upload to Filebase...');
       
-      // 创建元数据
-      const nftMetadata = {
-        name: metadata.title,
-        description: metadata.description,
-        image: `ipfs://${fileResult.path}`,
-        attributes: metadata.attributes
+      // 生成唯一的文件名
+      const fileName = `${Date.now()}-${file.originalname}`;
+      
+      const params = {
+        Bucket: process.env.FILEBASE_BUCKET,
+        Key: fileName,
+        Body: file.buffer,
+        ContentType: file.mimetype
       };
 
-      // 上传元数据到IPFS
-      const metadataResult = await this.ipfs.add(JSON.stringify(nftMetadata));
+      const command = new PutObjectCommand(params);
+      await this.s3Client.send(command);
+
+      // Filebase IPFS CID 格式
+      const cid = await this.getFileCID(fileName);
+      const ipfsUrl = `ipfs://${cid}`;
       
-      return {
-        imageHash: fileResult.path,
-        metadataHash: metadataResult.path
-      };
+      console.log('File uploaded to Filebase IPFS:', ipfsUrl);
+      return ipfsUrl;
+
     } catch (error) {
-      throw new Error('Failed to upload to IPFS');
+      console.error('Filebase upload error:', error);
+      throw new Error(`Filebase upload failed: ${error.message}`);
     }
   }
 
-  async mintNFT(userId, ipfsHash, metadata) {
+  // 获取文件的 CID
+  async getFileCID(fileName) {
     try {
+      const params = {
+        Bucket: process.env.FILEBASE_BUCKET,
+        Key: fileName
+      };
+
+      const command = new HeadObjectCommand(params);
+      const response = await this.s3Client.send(command);
+
+      // Filebase 在响应头中提供 CID
+      const cid = response.Metadata?.['cid'];
+      
+      if (!cid) {
+        throw new Error('CID not found in metadata');
+      }
+
+      console.log('Retrieved CID:', cid);
+      return cid;
+
+    } catch (error) {
+      console.error('Error getting CID:', error);
+      throw new Error(`Failed to get CID: ${error.message}`);
+    }
+  }
+
+  // 上传元数据到 Filebase IPFS
+  async uploadMetadataToIPFS(metadata) {
+    try {
+      const fileName = `metadata-${Date.now()}.json`;
+      
+      const params = {
+        Bucket: process.env.FILEBASE_BUCKET,
+        Key: fileName,
+        Body: JSON.stringify(metadata),
+        ContentType: 'application/json'
+      };
+
+      const command = new PutObjectCommand(params);
+      await this.s3Client.send(command);
+
+      const cid = await this.getFileCID(fileName);
+      const ipfsUrl = `ipfs://${cid}`;
+      
+      console.log('Metadata uploaded to Filebase IPFS:', ipfsUrl);
+      return ipfsUrl;
+
+    } catch (error) {
+      console.error('Filebase metadata upload error:', error);
+      throw new Error(`Filebase metadata upload failed: ${error.message}`);
+    }
+  }
+
+  // 铸造NFT
+  async mintNFT(userId, file, nftData) {
+    try {
+      // 检查账户余额
+      const balance = await this.provider.getBalance(this.wallet.address);
+      console.log('Account balance:', ethers.formatEther(balance), 'ETH');
+      
+      if (balance === BigInt(0)) {
+        throw new Error('Insufficient funds in wallet');
+      }
+
+      // 1. 上传图片到IPFS
+      const imageUrl = await this.uploadFileToIPFS(file);
+
+      // 2. 创建并上传元数据
+      const metadata = {
+        name: nftData.title,
+        description: nftData.description,
+        image: imageUrl,
+        attributes: [
+          {
+            trait_type: "Creator",
+            value: userId
+          },
+          {
+            trait_type: "Price",
+            value: nftData.price
+          },
+          {
+            trait_type: "RentPrice",
+            value: nftData.rentPrice || "0"
+          }
+        ]
+      };
+
+      const metadataUrl = await this.uploadMetadataToIPFS(metadata);
+
+      // 3. 调用智能合约铸造NFT
+      console.log('Minting NFT with:', {
+        metadataUrl,
+        royaltyPercentage: nftData.royaltyPercentage
+      });
+
+      const tx = await this.nftContract.mintNFT(
+        metadataUrl,
+        nftData.royaltyPercentage
+      );
+
+      const receipt = await tx.wait();
+      console.log('Mint transaction receipt:', receipt);
+
+      // 4. 从事件中获取tokenId
+      const mintEvent = receipt.events.find(e => e.event === 'NFTMinted');
+      const tokenId = mintEvent.args.tokenId.toString();
+
+      // 5. 保存到数据库
       const nft = new NFT({
+        tokenId,
         creator: userId,
         owner: userId,
-        title: metadata.title,
-        description: metadata.description,
-        ipfsHash: ipfsHash,
-        price: metadata.price,
-        rentPrice: metadata.rentPrice,
-        royaltyPercentage: metadata.royaltyPercentage
+        title: nftData.title,
+        description: nftData.description,
+        ipfsHash: metadataUrl,
+        imageUrl: imageUrl,
+        price: nftData.price,
+        rentPrice: nftData.rentPrice,
+        royaltyPercentage: nftData.royaltyPercentage
       });
 
       await nft.save();
-      return nft;
+
+      // 6. 返回完整的NFT信息
+      return {
+        tokenId,
+        metadata: metadata,
+        ipfsHash: metadataUrl,
+        imageUrl: imageUrl,
+        transactionHash: receipt.transactionHash,
+        ...nft.toObject()
+      };
+
     } catch (error) {
-      throw new Error('Failed to mint NFT');
+      console.error('NFT minting error:', error);
+      throw new Error(`Failed to mint NFT: ${error.message}`);
     }
   }
 
@@ -325,6 +481,32 @@ class NFTService {
       throw new Error(`添加评论失败: ${error.message}`);
     }
   }
+
+  // 铸造NFT的合约调用
+  async mintNFTOnChain(metadataUrl, royaltyPercentage) {
+    try {
+      const signer = await this.provider.getSigner();
+      const contractWithSigner = this.nftContract.connect(signer);
+
+      const tx = await contractWithSigner.mintNFT(
+        metadataUrl,
+        royaltyPercentage
+      );
+
+      const receipt = await tx.wait();
+      console.log('NFT minted on chain:', receipt.transactionHash);
+
+      // 从事件中获取tokenId
+      const mintEvent = receipt.events.find(e => e.event === 'NFTMinted');
+      return {
+        tokenId: mintEvent.args.tokenId.toString(),
+        transactionHash: receipt.transactionHash
+      };
+    } catch (error) {
+      console.error('Error minting NFT on chain:', error);
+      throw new Error(`Blockchain mint failed: ${error.message}`);
+    }
+  }
 }
 
-module.exports = new NFTService(); 
+export default new NFTService(); 

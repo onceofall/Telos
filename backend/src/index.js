@@ -1,13 +1,13 @@
-const express = require('express');
-const cors = require('cors');
-const mongoose = require('mongoose');
-const dotenv = require('dotenv');
+import express from 'express';
+import cors from 'cors';
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
 
-// 路由导入
-const authRoutes = require('./routes/auth.routes');
-const nftRoutes = require('./routes/nft.routes');
-const userRoutes = require('./routes/user.routes');
-const galleryRoutes = require('./routes/gallery.routes');
+// 导入路由
+import authRoutes from './routes/auth.routes.js';
+import nftRoutes from './routes/nft.routes.js';
+import userRoutes from './routes/user.routes.js';
+import galleryRoutes from './routes/gallery.routes.js';
 
 // 初始化配置
 dotenv.config();
@@ -18,10 +18,10 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 数据库连接
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('Connected to MongoDB'))
-  .catch((err) => console.error('MongoDB connection error:', err));
+// 基础健康检查路由
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date() });
+});
 
 // 路由配置
 app.use('/api/auth', authRoutes);

@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const nftSchema = new mongoose.Schema({
   tokenId: {
@@ -34,23 +34,19 @@ const nftSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
-  isRented: {
+  isListed: {
     type: Boolean,
     default: false,
   },
-  rentExpiry: Date,
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-  isListed: {
+  isRented: {
     type: Boolean,
-    default: false
+    default: false,
   },
   renter: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   },
+  rentExpiry: Date,
   likes: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
@@ -69,7 +65,24 @@ const nftSchema = new mongoose.Schema({
       type: Date,
       default: Date.now
     }
-  }]
+  }],
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+  imageUrl: {
+    type: String,
+    required: true,
+  },
+  metadataUrl: {
+    type: String,
+    required: true,
+  },
+  transactionHash: {
+    type: String,
+  },
 });
 
-module.exports = mongoose.model('NFT', nftSchema); 
+const NFT = mongoose.model('NFT', nftSchema);
+
+export default NFT; 

@@ -1,35 +1,20 @@
-const NFTService = require('../services/nft.service');
-const multer = require('multer');
-const upload = multer({
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 限制5MB
-  }
-});
+import NFTService from '../services/nft.service.js';
 
-class NFTController {
-  // 上传并铸造NFT
-  async mintNFT(req, res) {
+const NFTController = {
+  // 铸造NFT
+  mintNFT: async (req, res) => {
     try {
       const { title, description, price, rentPrice, royaltyPercentage } = req.body;
       const file = req.file;
-      const userId = req.user.id; // 从认证中间件获取
+      const userId = req.id;
 
-      // 参数验证
       if (!file || !title || !price) {
         return res.status(400).json({ 
           message: '缺少必要参数：图片、标题或价格' 
         });
       }
 
-      // 上传到IPFS
-      const ipfsResult = await NFTService.uploadToIPFS(file, {
-        title,
-        description,
-        attributes: []
-      });
-
-      // 铸造NFT
-      const nft = await NFTService.mintNFT(userId, ipfsResult.metadataHash, {
+      const nft = await NFTService.mintNFT(userId, file, {
         title,
         description,
         price,
@@ -41,7 +26,6 @@ class NFTController {
         message: 'NFT铸造成功',
         data: nft
       });
-
     } catch (error) {
       console.error('NFT铸造失败:', error);
       res.status(500).json({ 
@@ -49,10 +33,10 @@ class NFTController {
         error: error.message 
       });
     }
-  }
+  },
 
   // 获取NFT详情
-  async getNFTDetails(req, res) {
+  getNFTDetails: async (req, res) => {
     try {
       const { tokenId } = req.params;
       const nft = await NFTService.getNFTByTokenId(tokenId);
@@ -67,17 +51,16 @@ class NFTController {
         message: '获取成功',
         data: nft
       });
-
     } catch (error) {
       res.status(500).json({ 
         message: '获取NFT详情失败',
         error: error.message 
       });
     }
-  }
+  },
 
   // 获取用户的NFT列表
-  async getUserNFTs(req, res) {
+  getUserNFTs: async (req, res) => {
     try {
       const { userId } = req.params;
       const nfts = await NFTService.getNFTsByUser(userId);
@@ -92,10 +75,10 @@ class NFTController {
         error: error.message
       });
     }
-  }
+  },
 
-  // 获取市场上在售的NFT列表
-  async getMarketNFTs(req, res) {
+  // 获取市场NFT列表
+  getMarketNFTs: async (req, res) => {
     try {
       const { page = 1, limit = 10, sort = 'price', order = 'asc' } = req.query;
       const nfts = await NFTService.getMarketNFTs(page, limit, sort, order);
@@ -110,10 +93,10 @@ class NFTController {
         error: error.message
       });
     }
-  }
+  },
 
   // 购买NFT
-  async buyNFT(req, res) {
+  buyNFT: async (req, res) => {
     try {
       const { tokenId } = req.params;
       const buyerId = req.user.id;
@@ -130,31 +113,10 @@ class NFTController {
         error: error.message
       });
     }
-  }
-
-  // 租赁NFT
-  async rentNFT(req, res) {
-    try {
-      const { tokenId } = req.params;
-      const { duration } = req.body; // 租赁时长（天）
-      const renterId = req.user.id;
-      
-      const result = await NFTService.rentNFT(tokenId, renterId, duration);
-      
-      res.json({
-        message: 'NFT租赁成功',
-        data: result
-      });
-    } catch (error) {
-      res.status(500).json({
-        message: 'NFT租赁失败',
-        error: error.message
-      });
-    }
-  }
+  },
 
   // 上架NFT
-  async listNFTForSale(req, res) {
+  listNFTForSale: async (req, res) => {
     try {
       const { tokenId } = req.params;
       const { price, rentPrice } = req.body;
@@ -172,10 +134,90 @@ class NFTController {
         error: error.message
       });
     }
-  }
+  },
+
+  // 下架NFT
+  delistNFT: async (req, res) => {
+    try {
+      const { tokenId } = req.params;
+      const ownerId = req.user.id;
+      
+      await NFTService.delistNFT(tokenId, ownerId);
+      
+      res.json({
+        message: 'NFT下架成功'
+      });
+    } catch (error) {
+      res.status(500).json({
+        message: 'NFT下架失败',
+        error: error.message
+      });
+    }
+  },
+
+  // 租赁NFT
+  rentNFT: async (req, res) => {
+    try {
+      const { tokenId } = req.params;
+      const { duration } = req.body;
+      const renterId = req.user.id;
+      
+      const result = await NFTService.rentNFT(tokenId, renterId, duration);
+      
+      res.json({
+        message: 'NFT租赁成功',
+        data: result
+      });
+    } catch (error) {
+      res.status(500).json({
+        message: 'NFT租赁失败',
+        error: error.message
+      });
+    }
+  },
+
+  // 延长租赁
+  extendRental: async (req, res) => {
+    try {
+      const { tokenId } = req.params;
+      const { duration } = req.body;
+      const renterId = req.user.id;
+      
+      const result = await NFTService.extendRental(tokenId, renterId, duration);
+      
+      res.json({
+        message: '租赁延期成功',
+        data: result
+      });
+    } catch (error) {
+      res.status(500).json({
+        message: '租赁延期失败',
+        error: error.message
+      });
+    }
+  },
+
+  // 结束租赁
+  endRental: async (req, res) => {
+    try {
+      const { tokenId } = req.params;
+      const userId = req.user.id;
+      
+      await NFTService.endRental(tokenId, userId);
+      
+      res.json({
+        message: '租赁结束成功'
+      });
+    } catch (error) {
+      res.status(500).json({
+        message: '租赁结束失败',
+        error: error.message
+      });
+    }
+  },
 
   // 更新版税
-  async updateRoyalty(req, res) {
+  updateRoyalty: async (req, res) => {
     try {
       const { tokenId } = req.params;
       const { royaltyPercentage } = req.body;
@@ -194,47 +236,6 @@ class NFTController {
       });
     }
   }
+};
 
-  // 点赞NFT
-  async likeNFT(req, res) {
-    try {
-      const { tokenId } = req.params;
-      const userId = req.user.id;
-      
-      const result = await NFTService.likeNFT(tokenId, userId);
-      
-      res.json({
-        message: '点赞成功',
-        data: result
-      });
-    } catch (error) {
-      res.status(500).json({
-        message: '点赞失败',
-        error: error.message
-      });
-    }
-  }
-
-  // 评论NFT
-  async addComment(req, res) {
-    try {
-      const { tokenId } = req.params;
-      const { content } = req.body;
-      const userId = req.user.id;
-      
-      const result = await NFTService.addComment(tokenId, userId, content);
-      
-      res.json({
-        message: '评论成功',
-        data: result
-      });
-    } catch (error) {
-      res.status(500).json({
-        message: '评论失败',
-        error: error.message
-      });
-    }
-  }
-}
-
-module.exports = new NFTController(); 
+export default NFTController; 

@@ -1,15 +1,18 @@
-const express = require('express');
+import express from 'express';
+import auth from '../middleware/auth.middleware.js';
+
 const router = express.Router();
-const AuthController = require('../controllers/auth.controller');
-const auth = require('../middleware/auth.middleware');
 
 // 获取登录 nonce
-router.post('/nonce', AuthController.getNonce);
+router.post('/nonce', (req, res) => {
+  // 临时返回
+  res.json({ message: 'Nonce endpoint' });
+});
 
-// 验证签名并登录
-router.post('/verify', AuthController.verifySignature);
+// 验证签名
+router.post('/verify', (req, res) => {
+  // 临时返回
+  res.json({ message: 'Verify endpoint' });
+});
 
-// 更新用户信息（需要认证）
-router.put('/profile', auth.authenticate, AuthController.updateProfile);
-
-module.exports = router; 
+export default router; 

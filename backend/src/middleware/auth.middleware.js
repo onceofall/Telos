@@ -1,5 +1,4 @@
-const jwt = require('jsonwebtoken');
-const User = require('../models/user.model');
+import jwt from 'jsonwebtoken';
 
 const auth = {
   authenticate: async (req, res, next) => {
@@ -7,26 +6,16 @@ const auth = {
       const token = req.header('Authorization')?.replace('Bearer ', '');
       
       if (!token) {
-        return res.status(401).json({ 
-          message: '请先登录' 
-        });
+        return res.status(401).json({ message: '请先登录' });
       }
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await User.findById(decoded.userId);
-
-      if (!user) {
-        throw new Error();
-      }
-
-      req.user = user;
+      req.user = decoded;
       next();
     } catch (error) {
-      res.status(401).json({ 
-        message: '认证失败' 
-      });
+      res.status(401).json({ message: '认证失败' });
     }
   }
 };
 
-module.exports = auth; 
+export default auth; 
