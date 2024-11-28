@@ -259,25 +259,45 @@ class NFTService {
 
   async getNFTByTokenId(tokenId) {
     try {
-      // 从数据库获取NFT tokenId
-      const nft = await NFT.findOne({ tokenId })
-        .populate('creator', 'username address')
-        .populate('owner', 'username address');
-
+      console.log('Fetching NFT details for tokenId:', tokenId);
+      
+      // 从数据库获取NFT信息
+      const nft = await NFT.findOne({ tokenId });
       if (!nft) {
+        console.log('NFT not found in database');
         return null;
       }
 
       // 获取链上数据
-      const onchainData = await this.contract.tokenURI(tokenId);
-      
-      // 合并数据
-      return {
-        ...nft.toObject(),
-        onchainData
-      };
+      try {
+        const tokenURI = await this.nftContract.tokenURI(tokenId);
+        console.log('Token URI from blockchain:', tokenURI);
+
+        // 如果是 IPFS URI，可以获取元数据
+        if (tokenURI.startsWith('ipfs://')) {
+          const cid = tokenURI.replace('ipfs://', '');
+          console.log('IPFS CID:', cid);
+        }
+
+        // 合并链上数据和数据库数据
+        const enrichedNFT = {
+          ...nft.toObject(),
+          onchainData: {
+            tokenURI
+          }
+        };
+
+        console.log('Enriched NFT data:', enrichedNFT);
+        return enrichedNFT;
+
+      } catch (error) {
+        console.error('Error fetching on-chain data:', error);
+        // 如果链上数据获取失败，至少返回数据库中的数据
+        return nft.toObject();
+      }
 
     } catch (error) {
+      console.error('Error in getNFTByTokenId:', error);
       throw new Error(`获取NFT失败: ${error.message}`);
     }
   }
