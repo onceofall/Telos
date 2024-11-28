@@ -7,13 +7,11 @@ const nftSchema = new mongoose.Schema({
     unique: true,
   },
   creator: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    type: String,
     required: true,
   },
   owner: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    type: String,
     required: true,
   },
   title: {
@@ -22,6 +20,14 @@ const nftSchema = new mongoose.Schema({
   },
   description: String,
   ipfsHash: {
+    type: String,
+    required: true,
+  },
+  imageUrl: {
+    type: String,
+    required: true,
+  },
+  metadataUrl: {
     type: String,
     required: true,
   },
@@ -43,44 +49,14 @@ const nftSchema = new mongoose.Schema({
     default: false,
   },
   renter: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
+    type: String,
   },
   rentExpiry: Date,
-  likes: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  }],
-  comments: [{
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true
-    },
-    content: {
-      type: String,
-      required: true
-    },
-    createdAt: {
-      type: Date,
-      default: Date.now
-    }
-  }],
+  transactionHash: String,
   createdAt: {
     type: Date,
     default: Date.now,
-  },
-  imageUrl: {
-    type: String,
-    required: true,
-  },
-  metadataUrl: {
-    type: String,
-    required: true,
-  },
-  transactionHash: {
-    type: String,
-  },
+  }
 });
 
 const NFT = mongoose.model('NFT', nftSchema);

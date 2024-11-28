@@ -178,28 +178,68 @@ class NFTService {
         nftData.royaltyPercentage
       );
 
+      console.log('Transaction hash:', tx.hash);
       const receipt = await tx.wait();
-      console.log('Mint transaction receipt:', receipt);
+      console.log('Transaction receipt:', receipt);
 
-      // 4. 从事件中获取tokenId
-      const mintEvent = receipt.events.find(e => e.event === 'NFTMinted');
-      const tokenId = mintEvent.args.tokenId.toString();
+      // 修改事件解析方式
+      const mintLog = receipt.logs.find(log => {
+        try {
+          const parsedLog = this.nftContract.interface.parseLog({
+            topics: log.topics,
+            data: log.data
+          });
+          // 检查是否为 Transfer 事件，因为这是 ERC721 标准的铸造事件
+          return parsedLog?.name === 'Transfer' && parsedLog.args[0] === ethers.ZeroAddress;
+        } catch (e) {
+          return false;
+        }
+      });
+
+      if (!mintLog) {
+        console.error('Available logs:', receipt.logs);
+        throw new Error('NFT minting event not found in transaction logs');
+      }
+
+      const parsedLog = this.nftContract.interface.parseLog({
+        topics: mintLog.topics,
+        data: mintLog.data
+      });
+
+      // 从 Transfer 事件中获取 tokenId
+      const tokenId = parsedLog.args[2].toString();
+      const creator = parsedLog.args[1];
+
+      console.log('Mint event parsed:', {
+        tokenId,
+        creator
+      });
 
       // 5. 保存到数据库
       const nft = new NFT({
         tokenId,
-        creator: userId,
-        owner: userId,
+        creator: creator,
+        owner: creator,
         title: nftData.title,
         description: nftData.description,
         ipfsHash: metadataUrl,
         imageUrl: imageUrl,
+        metadataUrl: metadataUrl,
         price: nftData.price,
         rentPrice: nftData.rentPrice,
-        royaltyPercentage: nftData.royaltyPercentage
+        royaltyPercentage: nftData.royaltyPercentage,
+        transactionHash: receipt.hash
+      });
+
+      console.log('Saving NFT to database:', {
+        tokenId,
+        creator,
+        metadataUrl,
+        imageUrl
       });
 
       await nft.save();
+      console.log('NFT saved successfully');
 
       // 6. 返回完整的NFT信息
       return {
@@ -207,7 +247,7 @@ class NFTService {
         metadata: metadata,
         ipfsHash: metadataUrl,
         imageUrl: imageUrl,
-        transactionHash: receipt.transactionHash,
+        transactionHash: receipt.hash,
         ...nft.toObject()
       };
 
